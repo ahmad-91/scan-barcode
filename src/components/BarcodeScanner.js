@@ -56,12 +56,6 @@ const BarcodeScanner = ({ onScan, scanning, setScanning }) => {
         }
       }
       
-      // Remove body class
-      try {
-        document.body.classList.remove('scanner-active');
-      } catch (err) {
-        // Ignore
-      }
     };
   }, []);
   
@@ -106,16 +100,13 @@ const BarcodeScanner = ({ onScan, scanning, setScanning }) => {
       }
       
       setScanning(false);
-      document.body.classList.remove('scanner-active');
     } catch (err) {
       // Ensure state is reset even if there's an error
       setScanning(false);
-      document.body.classList.remove('scanner-active');
     }
   }, [setScanning]);
 
   const handleScanSuccess = useCallback((barcode) => {
-    document.body.classList.remove('scanner-active');
     stopScanning();
     onScan(barcode);
   }, [stopScanning, onScan]);
@@ -128,11 +119,6 @@ const BarcodeScanner = ({ onScan, scanning, setScanning }) => {
 
     try {
       setScanning(true);
-      
-      // Prevent body scroll on mobile when scanner is active
-      if (isMobile) {
-        document.body.classList.add('scanner-active');
-      }
       
       // Clean up any existing instance before creating a new one
       if (html5QrCodeRef.current) {
@@ -158,60 +144,90 @@ const BarcodeScanner = ({ onScan, scanning, setScanning }) => {
       
       html5QrCodeRef.current = new Html5Qrcode(elementId);
 
-      // Calculate responsive qrbox size for mobile
+      // Calculate responsive qrbox size
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      const qrboxSize = isMobile 
-        ? Math.min(
-            viewportWidth * CAMERA_CONFIG.qrbox.mobile.widthRatio,
-            viewportHeight * CAMERA_CONFIG.qrbox.mobile.heightRatio,
-            CAMERA_CONFIG.qrbox.mobile.maxSize
-          )
-        : CAMERA_CONFIG.qrbox.desktop.width;
+      
+      // For mobile, use fixed size that fits well on screen
+      // For desktop, use calculated size
+      let qrboxConfig;
+      if (isMobile) {
+        // Use fixed size for mobile (will be contained within scanner-view)
+        const mobileSize = Math.min(
+          Math.min(viewportWidth * 0.85, viewportHeight * 0.5),
+          350 // Max 350px
+        );
+        qrboxConfig = { width: mobileSize, height: mobileSize };
+      } else {
+        const desktopSize = CAMERA_CONFIG.qrbox.desktop.width;
+        qrboxConfig = { width: desktopSize, height: desktopSize };
+      }
 
-      // Configure scanner for better barcode detection on mobile
-      // Explicitly enable all barcode formats for better detection
+      // Configure scanner for better barcode detection
+      // html5-qrcode works best with optimized settings for barcode scanning
       const config = {
-        fps: CAMERA_CONFIG.fps,
-        aspectRatio: CAMERA_CONFIG.aspectRatio,
+        fps: 10, // Higher FPS for better detection
+        aspectRatio: 1.0,
         disableFlip: false,
-        // Use larger scanning area on mobile for better barcode detection
-        qrbox: isMobile 
-          ? { widthRatio: 0.9, heightRatio: 0.7 } // Larger area = better detection
-          : { width: qrboxSize, height: qrboxSize },
-        // Explicitly support all barcode formats
+        // Use fixed width/height for qrbox (required by html5-qrcode)
+        qrbox: qrboxConfig,
+        // Only include barcode formats (not QR codes) for better performance
         formatsToSupport: [
-          Html5QrcodeSupportedFormats.QR_CODE,
-          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_128,  // Most common barcode format
           Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_13,    // European Article Number
           Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_A,     // Universal Product Code
           Html5QrcodeSupportedFormats.UPC_E,
           Html5QrcodeSupportedFormats.CODE_93,
           Html5QrcodeSupportedFormats.CODABAR,
           Html5QrcodeSupportedFormats.ITF,
+          // Keep QR_CODE for compatibility
+          Html5QrcodeSupportedFormats.QR_CODE,
         ],
+        // Enable verbose mode for debugging
+        verbose: false,
+        // Try harder to detect barcodes
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true, // Use native barcode detector if available
+        },
       };
 
       console.log('[Scanner] Starting with config:', config);
       console.log('[Scanner] Mobile mode:', isMobile);
+      console.log('[Scanner] QRBox size:', qrboxConfig);
       
+      // Try to use native barcode detector API if available (better performance)
+      let cameraConfig = { facingMode: 'environment' };
+      
+      // Start the scanner
       await html5QrCodeRef.current.start(
-        { facingMode: 'environment' },
+        cameraConfig,
         config,
-        (decodedText) => {
-          console.log('[Scanner] ✅ Barcode detected:', decodedText);
-          handleScanSuccess(decodedText);
+        (decodedText, decodedResult) => {
+          console.log('[Scanner] ✅ Code detected:', decodedText);
+          console.log('[Scanner] Format:', decodedResult?.result?.format);
+          console.log('[Scanner] Full result:', decodedResult);
+          
+          // Validate that it's a numeric barcode (UPC/EAN/GTIN)
+          // Remove any non-numeric characters (spaces, dashes, etc.)
+          const cleanedBarcode = decodedText.replace(/[^0-9]/g, '');
+          
+          if (/^\d{8,14}$/.test(cleanedBarcode)) {
+            console.log('[Scanner] ✅ Valid barcode format, processing:', cleanedBarcode);
+            handleScanSuccess(cleanedBarcode);
+          } else {
+            console.warn('[Scanner] ⚠️ Invalid barcode format:', cleanedBarcode, '(length:', cleanedBarcode.length, ')');
+            // Still try to use it if it's close (6-15 digits)
+            if (/^\d{6,15}$/.test(cleanedBarcode)) {
+              console.log('[Scanner] ⚠️ Using barcode despite unusual length:', cleanedBarcode);
+              handleScanSuccess(cleanedBarcode);
+            }
+          }
         },
         (errorMessage) => {
-          // Log errors for debugging but don't show to user (they're frequent during scanning)
-          // Only log if it's not a common "not found" error
-          if (!errorMessage.includes('No QR code') && 
-              !errorMessage.includes('NotFoundException') &&
-              !errorMessage.includes('No MultiFormat Readers')) {
-            console.debug('[Scanner] Scanning error:', errorMessage);
-          }
+          // Log all errors for debugging
+          console.debug('[Scanner] Scanning attempt:', errorMessage);
         }
       );
       
@@ -224,7 +240,6 @@ const BarcodeScanner = ({ onScan, scanning, setScanning }) => {
       // Clean up any partial initialization
       isScannerRunningRef.current = false;
       setScanning(false);
-      document.body.classList.remove('scanner-active');
       
       // Try to clean up the scanner instance if it was created
       if (html5QrCodeRef.current) {
@@ -276,7 +291,7 @@ const BarcodeScanner = ({ onScan, scanning, setScanning }) => {
         />
       )}
       
-      <div className={`scanner-container ${scanning && isMobile ? 'mobile-active' : ''}`}>
+      <div className="scanner-container">
         <div
           ref={scannerRef}
           className={`scanner-view ${scanning ? 'active' : ''} ${isMobile ? 'mobile' : ''}`}

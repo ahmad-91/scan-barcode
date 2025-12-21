@@ -13,9 +13,9 @@ export const BARCODE_MIN_LENGTH = 8;
 export const BARCODE_MAX_LENGTH = 14;
 
 export const CAMERA_CONFIG = {
-  fps: 10,
+  fps: 10, // Frames per second - higher = better detection but more CPU
   qrbox: {
-    desktop: { width: 250, height: 250 },
+    desktop: { width: 300, height: 300 }, // Larger area for better detection
     // Mobile: Use larger area for better barcode detection
     mobile: { widthRatio: 0.9, heightRatio: 0.7, maxSize: 400 },
   },

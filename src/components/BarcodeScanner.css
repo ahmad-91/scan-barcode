@@ -4,17 +4,23 @@
 
 .scanner-container {
   margin-bottom: 20px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .scanner-view {
   width: 100%;
   min-height: 300px;
+  max-height: 500px;
   background: #f5f5f5;
   border-radius: 10px;
   overflow: hidden;
   position: relative;
   border: 2px dashed #ddd;
   isolation: isolate; /* Create new stacking context */
+  /* Ensure camera feed stays within bounds */
+  object-fit: contain;
 }
 
 .scanner-view.active {
@@ -22,23 +28,33 @@
 }
 
 .scanner-view.mobile {
-  min-height: 50vh;
-  max-height: 70vh;
-  border-radius: 0;
-  border: none;
+  min-height: 400px;
+  max-height: 500px;
+  border-radius: 10px;
+  border: 2px dashed #ddd;
 }
 
 .scanner-view.mobile.active {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  min-height: 100vh;
-  max-height: 100vh;
-  z-index: 1000;
-  border-radius: 0;
-  border: none;
+  position: relative;
+  width: 100%;
+  min-height: 400px;
+  max-height: 500px;
+  z-index: 1;
+  border-radius: 10px;
+  border: 2px solid #667eea;
+  overflow: hidden;
+  /* Ensure video element stays within bounds */
+  max-width: 100%;
+}
+
+/* Ensure html5-qrcode video element stays within scanner-view */
+.scanner-view video,
+.scanner-view canvas {
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+  height: auto !important;
+  object-fit: contain !important;
 }
 
 .scanner-placeholder {
@@ -75,14 +91,9 @@
   margin-top: 15px;
 }
 
-.scanner-container.mobile-active .scanner-controls {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1001;
-  width: 90%;
-  max-width: 300px;
+.scanner-controls {
+  text-align: center;
+  margin-top: 15px;
 }
 
 .btn {
@@ -193,12 +204,18 @@
   }
 
   .scanner-view {
-    min-height: 50vh;
-    border-radius: 8px;
+    min-height: 400px;
+    max-height: 500px;
+    border-radius: 10px;
+  }
+
+  .scanner-view.mobile {
+    min-height: 400px;
+    max-height: 500px;
   }
 
   .scanner-placeholder {
-    min-height: 50vh;
+    min-height: 400px;
     font-size: 0.85rem;
   }
 
@@ -253,12 +270,18 @@
   }
 
   .scanner-view {
-    min-height: 45vh;
-    border-radius: 6px;
+    min-height: 350px;
+    max-height: 450px;
+    border-radius: 8px;
+  }
+
+  .scanner-view.mobile {
+    min-height: 350px;
+    max-height: 450px;
   }
 
   .scanner-placeholder {
-    min-height: 45vh;
+    min-height: 350px;
     font-size: 0.8rem;
     padding: 20px;
   }
@@ -327,34 +350,26 @@
 /* Mobile-specific optimizations */
 @media (max-width: 768px) and (orientation: portrait) {
   .scanner-view.mobile.active {
-    height: 100vh;
-    height: 100dvh; /* Dynamic viewport height for mobile browsers */
-  }
-
-  .scanner-container.mobile-active .scanner-controls {
-    bottom: 15px;
-    width: 95%;
+    min-height: 400px;
+    max-height: 500px;
+    height: auto;
   }
 }
 
 @media (max-width: 768px) and (orientation: landscape) {
   .scanner-view.mobile.active {
-    height: 100vh;
-    height: 100dvh;
+    min-height: 350px;
+    max-height: 400px;
+    height: auto;
   }
 
   .scanner-view {
-    min-height: 60vh;
-  }
-
-  .scanner-container.mobile-active .scanner-controls {
-    bottom: 10px;
-    width: 95%;
-    max-width: 400px;
+    min-height: 350px;
+    max-height: 400px;
   }
 
   .btn {
-    padding: 10px 20px;
+    padding: 12px 20px;
     font-size: 14px;
   }
 }
