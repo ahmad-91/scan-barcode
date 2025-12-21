@@ -6,9 +6,8 @@
 const API_BASE_URL = 'https://big-product-data.p.rapidapi.com';
 // Fallback API - Barcodes Lookup API
 const FALLBACK_API_BASE_URL = 'https://barcodes-lookup.p.rapidapi.com';
-// RapidAPI gateway timeout is 180 seconds by default
-// Using 60 seconds for browser requests to allow for slow API responses
-const REQUEST_TIMEOUT = 60000; // 60 seconds
+// Shorter timeout for mobile - don't wait too long
+const REQUEST_TIMEOUT = 15000; // 15 seconds - shorter for better mobile experience
 
 /**
  * Get API key from environment variables
@@ -141,10 +140,10 @@ export const testRapidAPIConnection = async () => {
 };
 
 /**
- * Fetch product data by barcode with retry mechanism
+ * Fetch product data by barcode (no retries for faster mobile experience)
  * Note: RapidAPI supports requests from localhost - CORS is handled automatically
  */
-export const fetchProductByBarcode = async (barcode, retries = 2) => {
+export const fetchProductByBarcode = async (barcode) => {
   const apiKey = getApiKey();
   
   // Validate barcode format (numeric, 8-14 digits typically)
@@ -164,42 +163,28 @@ export const fetchProductByBarcode = async (barcode, retries = 2) => {
   // The correct endpoint is: /gtin/{barcode}
   const endpoint = `${API_BASE_URL}/gtin/${barcode}`;
 
-  let lastError = null;
-  
-  // Retry logic for transient failures
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      if (attempt > 0) {
-        console.log(`[API] Retry attempt ${attempt} of ${retries}`);
-        // Wait before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-      }
-      
-      console.log(`[API] Making HTTPS GET request to: ${endpoint}`);
-      console.log(`[API] Timeout set to: ${REQUEST_TIMEOUT}ms (${REQUEST_TIMEOUT / 1000} seconds)`);
-      console.log(`[API] Request origin: ${window.location.origin}`);
-      console.log(`[API] RapidAPI supports localhost requests - CORS handled automatically`);
-      
-      const requestStartTime = Date.now();
+  try {
+    console.log(`[API] Making HTTPS GET request to: ${endpoint}`);
+    console.log(`[API] Timeout: ${REQUEST_TIMEOUT / 1000} seconds (no retries)`);
     
-      // Make HTTPS GET request to RapidAPI
-      // RapidAPI automatically handles CORS for localhost requests
-      // All RapidAPI endpoints support requests from any origin including localhost
-      const response = await fetchWithTimeout(
-        endpoint,
-        {
-          method: 'GET',
-          headers,
-          cache: 'no-cache',
-          mode: 'cors', // CORS mode - RapidAPI supports this
-          credentials: 'omit', // Don't send cookies
-          redirect: 'follow',
-        },
-        REQUEST_TIMEOUT
-      );
+    const requestStartTime = Date.now();
+  
+    // Make HTTPS GET request to RapidAPI - single attempt, no retries
+    const response = await fetchWithTimeout(
+      endpoint,
+      {
+        method: 'GET',
+        headers,
+        cache: 'no-cache',
+        mode: 'cors',
+        credentials: 'omit',
+        redirect: 'follow',
+      },
+      REQUEST_TIMEOUT
+    );
 
-      const requestDuration = Date.now() - requestStartTime;
-      console.log(`[API] Request completed in ${requestDuration}ms`);
+    const requestDuration = Date.now() - requestStartTime;
+    console.log(`[API] Request completed in ${requestDuration}ms`);
 
     console.log(`[API] Response status: ${response.status}`);
     console.log(`[API] Response headers:`, Object.fromEntries(response.headers.entries()));
@@ -320,6 +305,13 @@ export const fetchProductByBarcode = async (barcode, retries = 2) => {
 
     // Handle HTTP errors
     if (response.status === 404) {
+      // Try fallback API before giving up
+      console.log('[API] 🔄 404 from primary API, trying fallback API...');
+      const fallbackData = await fetchFromFallbackAPI(barcode);
+      if (fallbackData && (fallbackData.name || fallbackData.product_name || fallbackData.image || fallbackData.manufacturer)) {
+        console.log('[API] ✅ Fallback API provided data');
+        return fallbackData;
+      }
       throw new Error('Product not found. Please try another barcode.');
     }
 
@@ -338,68 +330,34 @@ export const fetchProductByBarcode = async (barcode, retries = 2) => {
     // For other errors
     const errorText = await response.text().catch(() => '');
     throw new Error(`API Error: ${response.status} ${response.statusText}. ${errorText}`);
-    } catch (error) {
-      console.error(`[API] Request error on attempt ${attempt + 1}:`, error);
-      
-      // Don't retry for these errors
-      if (error.message.includes('API key') || 
-          error.message.includes('Rate limit') ||
-          error.message.includes('Product not found') ||
-          error.message.includes('404') ||
-          error.message.includes('401') ||
-          error.message.includes('403')) {
-        throw error;
-      }
-
-      // If it's a timeout/network error and we have retries left, try again
-      if ((error.message === 'Request timeout' || error.name === 'AbortError' ||
-           (error.name === 'TypeError' && error.message.includes('fetch'))) && 
-          attempt < retries) {
-        console.warn(`[API] Retryable error on attempt ${attempt + 1}, will retry...`);
-        lastError = error;
-        continue;
-      }
-
-      // For server errors (5xx), retry if we have attempts left
-      if (error.message.includes('Server error: 5') && attempt < retries) {
-        console.warn(`[API] Server error on attempt ${attempt + 1}, will retry...`);
-        lastError = error;
-        continue;
-      }
-
-      // If this was the last attempt, format and throw the error
-      if (attempt === retries) {
-        if (error.message === 'Request timeout' || error.name === 'AbortError') {
-          console.error('[API] Request timed out after', REQUEST_TIMEOUT, 'ms (', REQUEST_TIMEOUT / 1000, 'seconds) and', retries, 'retries');
-          console.error('[API] This suggests the API is taking longer than', REQUEST_TIMEOUT / 1000, 'seconds to respond');
-          console.error('[API] Try checking:');
-          console.error('[API] 1. Browser Network tab (F12) to see if request is pending');
-          console.error('[API] 2. RapidAPI dashboard to check API status');
-          console.error('[API] 3. Your internet connection speed');
-          throw new Error(`Request timed out after ${REQUEST_TIMEOUT / 1000} seconds. The API is taking too long to respond.\n\nPossible causes:\n- Slow network connection\n- API server processing delay\n- High API load\n- Firewall/proxy blocking the request\n\nCheck browser console (F12) for more details.`);
+  } catch (error) {
+    console.error('[API] Request error:', error);
+    
+    // Handle timeout - no retries, just try fallback
+    if (error.message === 'Request timeout' || error.name === 'AbortError') {
+      console.warn('[API] ⚠️ Request timed out, trying fallback API...');
+      try {
+        const fallbackData = await fetchFromFallbackAPI(barcode);
+        if (fallbackData && (fallbackData.name || fallbackData.product_name || fallbackData.image || fallbackData.manufacturer)) {
+          console.log('[API] ✅ Fallback API provided data after timeout');
+          return fallbackData;
         }
-        
-        if (error.name === 'TypeError' && (error.message.includes('fetch') || error.message.includes('Failed to fetch'))) {
-          console.error('[API] Network fetch error');
-          console.error('[API] This could be:\n- Network connectivity issue\n- CORS error (unlikely with RapidAPI)\n- Firewall/proxy blocking the request\n- Browser security settings');
-          throw new Error('Network error. RapidAPI supports localhost requests, so this might be:\n- Internet connection issue\n- Firewall/proxy blocking requests\n- Browser security settings\n\nCheck browser console (F12) for detailed error messages.');
-        }
-
-        if (error.message.includes('CORS') || error.message.includes('cross-origin')) {
-          throw new Error('CORS error. Please check your browser console for details.');
-        }
-
-        throw error;
+      } catch (fallbackError) {
+        console.warn('[API] Fallback API also failed:', fallbackError.message);
       }
-
-      // Store error for potential retry
-      lastError = error;
+      throw new Error(`Request timed out after ${REQUEST_TIMEOUT / 1000} seconds. Please check your internet connection.`);
     }
-  }
-  
-  // This should never be reached, but just in case
-  if (lastError) {
-    throw lastError;
+    
+    if (error.name === 'TypeError' && (error.message.includes('fetch') || error.message.includes('Failed to fetch'))) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+
+    if (error.message.includes('CORS') || error.message.includes('cross-origin')) {
+      throw new Error('CORS error. Please check your browser console for details.');
+    }
+
+    // Re-throw other errors
+    throw error;
   }
 };
 
