@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import ErrorDisplay from './ErrorDisplay';
 import { CAMERA_CONFIG, ERROR_MESSAGES } from '../utils/constants';
 import './BarcodeScanner.css';
@@ -169,19 +169,49 @@ const BarcodeScanner = ({ onScan, scanning, setScanning }) => {
           )
         : CAMERA_CONFIG.qrbox.desktop.width;
 
+      // Configure scanner for better barcode detection on mobile
+      // Explicitly enable all barcode formats for better detection
+      const config = {
+        fps: CAMERA_CONFIG.fps,
+        aspectRatio: CAMERA_CONFIG.aspectRatio,
+        disableFlip: false,
+        // Use larger scanning area on mobile for better barcode detection
+        qrbox: isMobile 
+          ? { widthRatio: 0.9, heightRatio: 0.7 } // Larger area = better detection
+          : { width: qrboxSize, height: qrboxSize },
+        // Explicitly support all barcode formats
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_93,
+          Html5QrcodeSupportedFormats.CODABAR,
+          Html5QrcodeSupportedFormats.ITF,
+        ],
+      };
+
+      console.log('[Scanner] Starting with config:', config);
+      console.log('[Scanner] Mobile mode:', isMobile);
+      
       await html5QrCodeRef.current.start(
         { facingMode: 'environment' },
-        {
-          fps: CAMERA_CONFIG.fps,
-          qrbox: { width: qrboxSize, height: qrboxSize },
-          aspectRatio: CAMERA_CONFIG.aspectRatio,
-          disableFlip: false,
-        },
+        config,
         (decodedText) => {
+          console.log('[Scanner] ✅ Barcode detected:', decodedText);
           handleScanSuccess(decodedText);
         },
         (errorMessage) => {
-          // Ignore scanning errors (they're frequent and expected)
+          // Log errors for debugging but don't show to user (they're frequent during scanning)
+          // Only log if it's not a common "not found" error
+          if (!errorMessage.includes('No QR code') && 
+              !errorMessage.includes('NotFoundException') &&
+              !errorMessage.includes('No MultiFormat Readers')) {
+            console.debug('[Scanner] Scanning error:', errorMessage);
+          }
         }
       );
       

@@ -16,7 +16,8 @@ export const CAMERA_CONFIG = {
   fps: 10,
   qrbox: {
     desktop: { width: 250, height: 250 },
-    mobile: { widthRatio: 0.85, heightRatio: 0.5, maxSize: 300 },
+    // Mobile: Use larger area for better barcode detection
+    mobile: { widthRatio: 0.9, heightRatio: 0.7, maxSize: 400 },
   },
   aspectRatio: 1.0,
 };
