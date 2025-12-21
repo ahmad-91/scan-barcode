@@ -308,13 +308,10 @@ export const fetchProductByBarcode = async (barcode, retries = 2) => {
       } else {
         // No data at all, try fallback API
         console.log('[API] 🔄 No data from primary API, trying fallback API...');
-        try {
-          const fallbackData = await fetchFromFallbackAPI(barcode);
-          if (fallbackData) {
-            return fallbackData;
-          }
-        } catch (fallbackError) {
-          console.warn('[API] Fallback API also failed:', fallbackError.message);
+        const fallbackData = await fetchFromFallbackAPI(barcode);
+        if (fallbackData && (fallbackData.name || fallbackData.product_name || fallbackData.image || fallbackData.manufacturer)) {
+          console.log('[API] ✅ Fallback API provided data when primary API had none');
+          return fallbackData;
         }
         
         throw new Error('لم يتم العثور على بيانات المنتج. يرجى المحاولة بباركود آخر.');
@@ -410,26 +407,16 @@ export const fetchProductByBarcode = async (barcode, retries = 2) => {
  * Fetch from fallback API (Barcodes Lookup API)
  * API: https://rapidapi.com/UnlimitedAPI/api/barcodes-lookup
  */
+/**
+ * Fetch from fallback API (Barcodes Lookup API)
+ * API: https://rapidapi.com/UnlimitedAPI/api/barcodes-lookup
+ * Endpoint: GET /?barcode={barcode}
+ */
 const fetchFromFallbackAPI = async (barcode) => {
   const apiKey = getApiKey();
-  // Try different endpoint formats for barcodes-lookup API
-  // Based on: https://rapidapi.com/UnlimitedAPI/api/barcodes-lookup
-  const endpoints = [
-    {
-      url: `${FALLBACK_API_BASE_URL}/v3/products`,
-      method: 'POST',
-      body: JSON.stringify({ barcode }),
-    },
-    {
-      url: `${FALLBACK_API_BASE_URL}/v3/products`,
-      method: 'GET',
-      params: `?barcode=${barcode}`,
-    },
-    {
-      url: `${FALLBACK_API_BASE_URL}/product/${barcode}`,
-      method: 'GET',
-    },
-  ];
+  
+  // Correct endpoint: GET /?barcode={barcode}
+  const endpoint = `${FALLBACK_API_BASE_URL}/?barcode=${barcode}`;
   
   const headers = {
     'X-RapidAPI-Key': apiKey,
@@ -437,73 +424,48 @@ const fetchFromFallbackAPI = async (barcode) => {
     'Accept': 'application/json',
   };
 
-  for (const endpoint of endpoints) {
-    try {
-      console.log(`[API] Trying fallback API endpoint: ${endpoint}`);
+  try {
+    console.log(`[API] 🔄 Trying fallback API: GET ${endpoint}`);
+    
+    const response = await fetchWithTimeout(
+      endpoint,
+      {
+        method: 'GET',
+        headers,
+        cache: 'no-cache',
+        mode: 'cors',
+        credentials: 'omit',
+      },
+      REQUEST_TIMEOUT
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[API] ✅ Fallback API response received');
+      console.log('[API] Response structure:', data.product ? 'Has product object' : 'No product object');
       
-      // Try POST first, then GET
-      let response = await fetchWithTimeout(
-        endpoint,
-        {
-          method: 'POST',
-          headers: {
-            ...headers,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ barcode }),
-          cache: 'no-cache',
-          mode: 'cors',
-          credentials: 'omit',
-        },
-        REQUEST_TIMEOUT
-      );
-
-      // If POST fails and endpoint supports GET, try GET
-      if (!response.ok && (endpoint.includes('/product/') || endpoint.includes('/lookup/'))) {
-        console.log(`[API] POST failed, trying GET for ${endpoint}`);
-        response = await fetchWithTimeout(
-          endpoint,
-          {
-            method: 'GET',
-            headers,
-            cache: 'no-cache',
-            mode: 'cors',
-            credentials: 'omit',
-          },
-          REQUEST_TIMEOUT
-        );
-      }
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[API] ✅ Fallback API response received');
-        console.log('[API] Response structure:', Object.keys(data));
-        
-        // Normalize fallback API response
-        const normalized = normalizeFallbackData(data, barcode);
-        if (normalized && (normalized.name || normalized.product_name || normalized.image || normalized.manufacturer)) {
-          console.log('[API] ✅ Fallback API provided useful data:', {
-            name: normalized.name,
-            image: !!normalized.image,
-            manufacturer: normalized.manufacturer,
-          });
-          return normalized;
-        } else {
-          console.warn('[API] Fallback API response but no useful data extracted');
-        }
+      // Normalize fallback API response
+      const normalized = normalizeFallbackData(data, barcode);
+      if (normalized && (normalized.name || normalized.product_name || normalized.image || normalized.manufacturer)) {
+        console.log('[API] ✅ Fallback API provided useful data:', {
+          name: normalized.name,
+          image: !!normalized.image,
+          manufacturer: normalized.manufacturer,
+        });
+        return normalized;
       } else {
-        const errorText = await response.text().catch(() => '');
-        console.log(`[API] Fallback endpoint returned ${response.status}:`, errorText.substring(0, 200));
+        console.warn('[API] ⚠️ Fallback API response but no useful data extracted');
+        return null;
       }
-    } catch (error) {
-      console.warn(`[API] Fallback endpoint failed:`, error.message);
-      // Continue to next endpoint
-      continue;
+    } else {
+      const errorText = await response.text().catch(() => '');
+      console.warn(`[API] ⚠️ Fallback API returned ${response.status}:`, errorText.substring(0, 200));
+      return null;
     }
+  } catch (error) {
+    console.error('[API] ❌ Fallback API error:', error.message);
+    return null;
   }
-  
-  console.log('[API] ⚠️ All fallback API endpoints failed');
-  return null;
 };
 
 /**
