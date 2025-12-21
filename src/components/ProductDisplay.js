@@ -25,10 +25,33 @@ const ProductDisplay = ({ product }) => {
   const description = product.description || product.product_description || null;
   const price = product.price || product.price_amount || null;
   const category = product.category || product.product_category || null;
+  
+  // Check for incomplete data
+  const missingFields = product.missingFields || [];
+  const hasIncompleteData = product.hasIncompleteData || false;
 
   return (
     <div className="product-display">
       <h2>Product Information</h2>
+      
+      {hasIncompleteData && missingFields.length > 0 && (
+        <div className="data-warning" role="alert">
+          <div className="warning-header">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>بيانات ناقصة</span>
+          </div>
+          <p className="warning-text">
+            البيانات التالية غير متوفرة لهذا المنتج:
+          </p>
+          <ul className="missing-fields-list">
+            {missingFields.map((field, index) => (
+              <li key={index}>{field}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="product-content">
         {productImage && !imageError ? (
           <div className="product-image-container">

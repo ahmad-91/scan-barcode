@@ -237,11 +237,55 @@ export const fetchProductByBarcode = async (barcode, retries = 2) => {
         hasImage: !!normalizedData.image
       });
       
-      // Verify we got valid product data
-      if (normalizedData && (normalizedData.name || normalizedData.product_name || normalizedData.gtin || normalizedData.upc)) {
+      // Check what data is available and what's missing
+      const missingFields = [];
+      const availableFields = [];
+      
+      if (!normalizedData.name && !normalizedData.product_name && !normalizedData.title) {
+        missingFields.push('اسم المنتج');
+      } else {
+        availableFields.push('اسم المنتج');
+      }
+      
+      if (!normalizedData.image && !normalizedData.product_image && !normalizedData.image_url) {
+        missingFields.push('صورة المنتج');
+      } else {
+        availableFields.push('صورة المنتج');
+      }
+      
+      if (!normalizedData.brand && !normalizedData.manufacturer) {
+        missingFields.push('العلامة التجارية');
+      } else {
+        availableFields.push('العلامة التجارية');
+      }
+      
+      if (!normalizedData.description && !normalizedData.product_description) {
+        missingFields.push('الوصف');
+      } else {
+        availableFields.push('الوصف');
+      }
+      
+      if (!normalizedData.price && !normalizedData.price_amount) {
+        missingFields.push('السعر');
+      } else {
+        availableFields.push('السعر');
+      }
+      
+      // Always return data if we have at least GTIN or some product info
+      if (normalizedData && (normalizedData.gtin || normalizedData.upc || normalizedData.name || normalizedData.product_name)) {
+        // Add metadata about missing fields
+        normalizedData.missingFields = missingFields;
+        normalizedData.availableFields = availableFields;
+        normalizedData.hasIncompleteData = missingFields.length > 0;
+        
+        if (missingFields.length > 0) {
+          console.warn(`[API] ⚠️ Product data is incomplete. Missing: ${missingFields.join(', ')}`);
+          console.log(`[API] ✅ Available fields: ${availableFields.join(', ')}`);
+        }
+        
         return normalizedData;
       } else {
-        throw new Error('Product data received but missing required fields.');
+        throw new Error('لم يتم العثور على بيانات المنتج. يرجى المحاولة بباركود آخر.');
       }
     }
 

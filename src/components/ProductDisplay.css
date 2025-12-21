@@ -13,6 +13,54 @@
   text-align: center;
 }
 
+.data-warning {
+  background: #fff3cd;
+  border: 2px solid #ffc107;
+  border-radius: 10px;
+  padding: 15px 20px;
+  margin-bottom: 20px;
+  color: #856404;
+}
+
+.warning-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+
+.warning-header svg {
+  color: #ff9800;
+  flex-shrink: 0;
+}
+
+.warning-text {
+  margin: 0 0 10px 0;
+  font-size: 0.95rem;
+}
+
+.missing-fields-list {
+  margin: 0;
+  padding-right: 20px;
+  list-style: none;
+}
+
+.missing-fields-list li {
+  padding: 5px 0;
+  position: relative;
+  font-size: 0.9rem;
+}
+
+.missing-fields-list li::before {
+  content: "•";
+  color: #ff9800;
+  font-weight: bold;
+  position: absolute;
+  right: -15px;
+}
+
 .product-content {
   display: flex;
   gap: 30px;
