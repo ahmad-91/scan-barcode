@@ -413,10 +413,22 @@ export const fetchProductByBarcode = async (barcode, retries = 2) => {
 const fetchFromFallbackAPI = async (barcode) => {
   const apiKey = getApiKey();
   // Try different endpoint formats for barcodes-lookup API
+  // Based on: https://rapidapi.com/UnlimitedAPI/api/barcodes-lookup
   const endpoints = [
-    `${FALLBACK_API_BASE_URL}/v3/products`,
-    `${FALLBACK_API_BASE_URL}/product/${barcode}`,
-    `${FALLBACK_API_BASE_URL}/lookup/${barcode}`,
+    {
+      url: `${FALLBACK_API_BASE_URL}/v3/products`,
+      method: 'POST',
+      body: JSON.stringify({ barcode }),
+    },
+    {
+      url: `${FALLBACK_API_BASE_URL}/v3/products`,
+      method: 'GET',
+      params: `?barcode=${barcode}`,
+    },
+    {
+      url: `${FALLBACK_API_BASE_URL}/product/${barcode}`,
+      method: 'GET',
+    },
   ];
   
   const headers = {
@@ -446,8 +458,9 @@ const fetchFromFallbackAPI = async (barcode) => {
         REQUEST_TIMEOUT
       );
 
-      // If POST fails, try GET
-      if (!response.ok && endpoint.includes('/product/') || endpoint.includes('/lookup/')) {
+      // If POST fails and endpoint supports GET, try GET
+      if (!response.ok && (endpoint.includes('/product/') || endpoint.includes('/lookup/'))) {
+        console.log(`[API] POST failed, trying GET for ${endpoint}`);
         response = await fetchWithTimeout(
           endpoint,
           {
@@ -463,19 +476,27 @@ const fetchFromFallbackAPI = async (barcode) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('[API] ✅ Fallback API response received:', data);
+        console.log('[API] ✅ Fallback API response received');
+        console.log('[API] Response structure:', Object.keys(data));
         
         // Normalize fallback API response
         const normalized = normalizeFallbackData(data, barcode);
-        if (normalized && (normalized.name || normalized.product_name || normalized.image)) {
-          console.log('[API] ✅ Fallback API provided useful data');
+        if (normalized && (normalized.name || normalized.product_name || normalized.image || normalized.manufacturer)) {
+          console.log('[API] ✅ Fallback API provided useful data:', {
+            name: normalized.name,
+            image: !!normalized.image,
+            manufacturer: normalized.manufacturer,
+          });
           return normalized;
+        } else {
+          console.warn('[API] Fallback API response but no useful data extracted');
         }
       } else {
-        console.log(`[API] Fallback endpoint ${endpoint} returned ${response.status}`);
+        const errorText = await response.text().catch(() => '');
+        console.log(`[API] Fallback endpoint returned ${response.status}:`, errorText.substring(0, 200));
       }
     } catch (error) {
-      console.warn(`[API] Fallback endpoint ${endpoint} failed:`, error.message);
+      console.warn(`[API] Fallback endpoint failed:`, error.message);
       // Continue to next endpoint
       continue;
     }
@@ -486,7 +507,20 @@ const fetchFromFallbackAPI = async (barcode) => {
 };
 
 /**
- * Normalize fallback API response
+ * Normalize fallback API response (Barcodes Lookup API)
+ * Response format:
+ * {
+ *   "product": {
+ *     "title": "Product Name",
+ *     "manufacturer": "Brand Name",
+ *     "brand": "Brand Name",
+ *     "description": "Description",
+ *     "images": ["url1", "url2", ...],
+ *     "online_stores": [{"name": "Amazon", "price": "$124.39", "url": "..."}],
+ *     "category": "Category",
+ *     "features": ["feature1", "feature2", ...]
+ *   }
+ * }
  */
 const normalizeFallbackData = (data, barcode) => {
   if (!data) return null;
@@ -496,24 +530,47 @@ const normalizeFallbackData = (data, barcode) => {
   
   if (!product) return null;
   
+  // Extract price from online_stores
+  let price = null;
+  if (product.online_stores && Array.isArray(product.online_stores) && product.online_stores.length > 0) {
+    const firstStore = product.online_stores[0];
+    price = firstStore.price || null;
+  }
+  
+  // Extract first image from images array
+  const image = product.images && Array.isArray(product.images) && product.images.length > 0
+    ? product.images[0]
+    : null;
+  
+  // Use features as description if description is missing
+  let description = product.description;
+  if (!description && product.features && Array.isArray(product.features) && product.features.length > 0) {
+    description = product.features.join('. ');
+  }
+  
   return {
     gtin: barcode,
     gtin13: barcode,
     gtin14: barcode,
     upc: barcode,
-    name: product.name || product.title || product.product_name || null,
-    product_name: product.name || product.title || product.product_name || null,
-    title: product.name || product.title || product.product_name || null,
+    name: product.title || product.name || product.product_name || null,
+    product_name: product.title || product.name || product.product_name || null,
+    title: product.title || product.name || product.product_name || null,
     brand: product.brand || product.manufacturer || null,
     manufacturer: product.manufacturer || product.brand || null,
-    description: product.description || product.product_description || null,
-    product_description: product.description || product.product_description || null,
-    image: product.image || product.image_url || product.images?.[0] || null,
-    product_image: product.image || product.image_url || product.images?.[0] || null,
-    image_url: product.image || product.image_url || product.images?.[0] || null,
-    price: product.price || product.price_amount || null,
-    price_amount: product.price || product.price_amount || null,
+    description: description || product.product_description || null,
+    product_description: description || product.product_description || null,
+    image: image || product.image || product.image_url || null,
+    product_image: image || product.image || product.image_url || null,
+    image_url: image || product.image || product.image_url || null,
+    price: price || product.price || product.price_amount || null,
+    price_amount: price || product.price || product.price_amount || null,
     category: product.category || product.product_category || null,
+    // Store additional data
+    features: product.features || null,
+    attributes: product.attributes || null,
+    online_stores: product.online_stores || null,
+    all_images: product.images || null, // Store all images for potential use
   };
 };
 
