@@ -4,6 +4,8 @@
 
 // RapidAPI Big Product Data API - using HTTPS as required
 const API_BASE_URL = 'https://big-product-data.p.rapidapi.com';
+// Fallback API - Barcodes Lookup API
+const FALLBACK_API_BASE_URL = 'https://barcodes-lookup.p.rapidapi.com';
 // RapidAPI gateway timeout is 180 seconds by default
 // Using 60 seconds for browser requests to allow for slow API responses
 const REQUEST_TIMEOUT = 60000; // 60 seconds
@@ -281,10 +283,40 @@ export const fetchProductByBarcode = async (barcode, retries = 2) => {
         if (missingFields.length > 0) {
           console.warn(`[API] ⚠️ Product data is incomplete. Missing: ${missingFields.join(', ')}`);
           console.log(`[API] ✅ Available fields: ${availableFields.join(', ')}`);
+          
+          // If critical data is missing (name or image), try fallback API
+          if (missingFields.includes('اسم المنتج') || missingFields.includes('صورة المنتج')) {
+            console.log('[API] 🔄 Trying fallback API for missing data...');
+            try {
+              const fallbackData = await fetchFromFallbackAPI(barcode);
+              if (fallbackData) {
+                // Merge fallback data with existing data
+                const mergedData = mergeProductData(normalizedData, fallbackData);
+                mergedData.missingFields = checkMissingFields(mergedData);
+                mergedData.availableFields = checkAvailableFields(mergedData);
+                mergedData.hasIncompleteData = mergedData.missingFields.length > 0;
+                return mergedData;
+              }
+            } catch (fallbackError) {
+              console.warn('[API] Fallback API failed:', fallbackError.message);
+              // Continue with original data
+            }
+          }
         }
         
         return normalizedData;
       } else {
+        // No data at all, try fallback API
+        console.log('[API] 🔄 No data from primary API, trying fallback API...');
+        try {
+          const fallbackData = await fetchFromFallbackAPI(barcode);
+          if (fallbackData) {
+            return fallbackData;
+          }
+        } catch (fallbackError) {
+          console.warn('[API] Fallback API also failed:', fallbackError.message);
+        }
+        
         throw new Error('لم يتم العثور على بيانات المنتج. يرجى المحاولة بباركود آخر.');
       }
     }
@@ -372,6 +404,166 @@ export const fetchProductByBarcode = async (barcode, retries = 2) => {
   if (lastError) {
     throw lastError;
   }
+};
+
+/**
+ * Fetch from fallback API (Barcodes Lookup API)
+ * API: https://rapidapi.com/UnlimitedAPI/api/barcodes-lookup
+ */
+const fetchFromFallbackAPI = async (barcode) => {
+  const apiKey = getApiKey();
+  // Try different endpoint formats for barcodes-lookup API
+  const endpoints = [
+    `${FALLBACK_API_BASE_URL}/v3/products`,
+    `${FALLBACK_API_BASE_URL}/product/${barcode}`,
+    `${FALLBACK_API_BASE_URL}/lookup/${barcode}`,
+  ];
+  
+  const headers = {
+    'X-RapidAPI-Key': apiKey,
+    'X-RapidAPI-Host': 'barcodes-lookup.p.rapidapi.com',
+    'Accept': 'application/json',
+  };
+
+  for (const endpoint of endpoints) {
+    try {
+      console.log(`[API] Trying fallback API endpoint: ${endpoint}`);
+      
+      // Try POST first, then GET
+      let response = await fetchWithTimeout(
+        endpoint,
+        {
+          method: 'POST',
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ barcode }),
+          cache: 'no-cache',
+          mode: 'cors',
+          credentials: 'omit',
+        },
+        REQUEST_TIMEOUT
+      );
+
+      // If POST fails, try GET
+      if (!response.ok && endpoint.includes('/product/') || endpoint.includes('/lookup/')) {
+        response = await fetchWithTimeout(
+          endpoint,
+          {
+            method: 'GET',
+            headers,
+            cache: 'no-cache',
+            mode: 'cors',
+            credentials: 'omit',
+          },
+          REQUEST_TIMEOUT
+        );
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[API] ✅ Fallback API response received:', data);
+        
+        // Normalize fallback API response
+        const normalized = normalizeFallbackData(data, barcode);
+        if (normalized && (normalized.name || normalized.product_name || normalized.image)) {
+          console.log('[API] ✅ Fallback API provided useful data');
+          return normalized;
+        }
+      } else {
+        console.log(`[API] Fallback endpoint ${endpoint} returned ${response.status}`);
+      }
+    } catch (error) {
+      console.warn(`[API] Fallback endpoint ${endpoint} failed:`, error.message);
+      // Continue to next endpoint
+      continue;
+    }
+  }
+  
+  console.log('[API] ⚠️ All fallback API endpoints failed');
+  return null;
+};
+
+/**
+ * Normalize fallback API response
+ */
+const normalizeFallbackData = (data, barcode) => {
+  if (!data) return null;
+  
+  // Handle different response structures from barcodes-lookup API
+  const product = data.product || data.data || data;
+  
+  if (!product) return null;
+  
+  return {
+    gtin: barcode,
+    gtin13: barcode,
+    gtin14: barcode,
+    upc: barcode,
+    name: product.name || product.title || product.product_name || null,
+    product_name: product.name || product.title || product.product_name || null,
+    title: product.name || product.title || product.product_name || null,
+    brand: product.brand || product.manufacturer || null,
+    manufacturer: product.manufacturer || product.brand || null,
+    description: product.description || product.product_description || null,
+    product_description: product.description || product.product_description || null,
+    image: product.image || product.image_url || product.images?.[0] || null,
+    product_image: product.image || product.image_url || product.images?.[0] || null,
+    image_url: product.image || product.image_url || product.images?.[0] || null,
+    price: product.price || product.price_amount || null,
+    price_amount: product.price || product.price_amount || null,
+    category: product.category || product.product_category || null,
+  };
+};
+
+/**
+ * Merge product data from two sources
+ */
+const mergeProductData = (primary, fallback) => {
+  return {
+    ...primary,
+    // Use fallback data only if primary is missing
+    name: primary.name || fallback.name || null,
+    product_name: primary.product_name || fallback.product_name || null,
+    title: primary.title || fallback.title || null,
+    brand: primary.brand || fallback.brand || null,
+    manufacturer: primary.manufacturer || fallback.manufacturer || null,
+    description: primary.description || fallback.description || null,
+    product_description: primary.product_description || fallback.product_description || null,
+    image: primary.image || fallback.image || null,
+    product_image: primary.product_image || fallback.product_image || null,
+    image_url: primary.image_url || fallback.image_url || null,
+    price: primary.price || fallback.price || null,
+    price_amount: primary.price_amount || fallback.price_amount || null,
+    category: primary.category || fallback.category || null,
+  };
+};
+
+/**
+ * Check missing fields
+ */
+const checkMissingFields = (data) => {
+  const missing = [];
+  if (!data.name && !data.product_name && !data.title) missing.push('اسم المنتج');
+  if (!data.image && !data.product_image && !data.image_url) missing.push('صورة المنتج');
+  if (!data.brand && !data.manufacturer) missing.push('العلامة التجارية');
+  if (!data.description && !data.product_description) missing.push('الوصف');
+  if (!data.price && !data.price_amount) missing.push('السعر');
+  return missing;
+};
+
+/**
+ * Check available fields
+ */
+const checkAvailableFields = (data) => {
+  const available = [];
+  if (data.name || data.product_name || data.title) available.push('اسم المنتج');
+  if (data.image || data.product_image || data.image_url) available.push('صورة المنتج');
+  if (data.brand || data.manufacturer) available.push('العلامة التجارية');
+  if (data.description || data.product_description) available.push('الوصف');
+  if (data.price || data.price_amount) available.push('السعر');
+  return available;
 };
 
 /**
