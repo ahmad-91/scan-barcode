@@ -1,0 +1,25 @@
+.error-boundary {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.error-boundary .container {
+  max-width: 600px;
+  width: 100%;
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.error-boundary h1 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 2rem;
+}
+

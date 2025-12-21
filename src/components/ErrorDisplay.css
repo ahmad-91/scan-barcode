@@ -1,0 +1,162 @@
+.error-display {
+  background: #fee;
+  border: 1px solid #fcc;
+  border-left: 4px solid #f33;
+  border-radius: 10px;
+  padding: 16px;
+  margin: 20px 0;
+  color: #c33;
+}
+
+.error-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.error-icon {
+  flex-shrink: 0;
+  color: #f33;
+  margin-top: 2px;
+}
+
+.error-message {
+  flex: 1;
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.error-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.btn-error {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-dismiss {
+  background: #fcc;
+  color: #c33;
+}
+
+.btn-dismiss:hover {
+  background: #faa;
+}
+
+.btn-retry {
+  background: #667eea;
+  color: white;
+}
+
+.btn-retry:hover {
+  background: #5568d3;
+}
+
+/* Tablet styles */
+@media (max-width: 1024px) {
+  .error-display {
+    padding: 14px;
+  }
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .error-display {
+    padding: 12px;
+    margin: 15px 0;
+    border-radius: 8px;
+  }
+
+  .error-content {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .error-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .error-message {
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  .error-actions {
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .btn-error {
+    width: 100%;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    min-height: 44px;
+  }
+}
+
+/* Small mobile styles */
+@media (max-width: 480px) {
+  .error-display {
+    padding: 10px;
+    margin: 12px 0;
+    border-radius: 6px;
+    border-left-width: 3px;
+  }
+
+  .error-content {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .error-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .error-message {
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+
+  .error-actions {
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .btn-error {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    min-height: 42px;
+  }
+}
+
+/* Extra small mobile */
+@media (max-width: 360px) {
+  .error-display {
+    padding: 8px;
+  }
+
+  .error-message {
+    font-size: 0.8rem;
+  }
+
+  .btn-error {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    min-height: 40px;
+  }
+}
+

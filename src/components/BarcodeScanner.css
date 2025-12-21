@@ -1,0 +1,361 @@
+.barcode-scanner {
+  margin-bottom: 30px;
+}
+
+.scanner-container {
+  margin-bottom: 20px;
+}
+
+.scanner-view {
+  width: 100%;
+  min-height: 300px;
+  background: #f5f5f5;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  border: 2px dashed #ddd;
+  isolation: isolate; /* Create new stacking context */
+}
+
+.scanner-view.active {
+  border-color: #667eea;
+}
+
+.scanner-view.mobile {
+  min-height: 50vh;
+  max-height: 70vh;
+  border-radius: 0;
+  border: none;
+}
+
+.scanner-view.mobile.active {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  max-height: 100vh;
+  z-index: 1000;
+  border-radius: 0;
+  border: none;
+}
+
+.scanner-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #999;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.scanner-placeholder.hidden {
+  display: none;
+}
+
+.scanner-placeholder svg {
+  margin-bottom: 15px;
+  color: #ccc;
+}
+
+.scanner-placeholder p {
+  font-size: 0.9rem;
+}
+
+.scanner-controls {
+  text-align: center;
+  margin-top: 15px;
+}
+
+.scanner-container.mobile-active .scanner-controls {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  width: 90%;
+  max-width: 300px;
+}
+
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+  background: #ff6b6b;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #ff5252;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+}
+
+.manual-input {
+  margin-top: 30px;
+  padding-top: 30px;
+  border-top: 2px solid #eee;
+}
+
+.divider {
+  text-align: center;
+  color: #999;
+  font-weight: 600;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background: #ddd;
+}
+
+.divider::before {
+  left: 0;
+}
+
+.divider::after {
+  right: 0;
+}
+
+.input-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.barcode-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+}
+
+.barcode-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* Tablet styles */
+@media (max-width: 1024px) {
+  .scanner-view {
+    min-height: 350px;
+  }
+
+  .scanner-placeholder {
+    height: 350px;
+  }
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .barcode-scanner {
+    margin-bottom: 20px;
+  }
+
+  .scanner-container {
+    margin-bottom: 15px;
+  }
+
+  .scanner-view {
+    min-height: 50vh;
+    border-radius: 8px;
+  }
+
+  .scanner-placeholder {
+    min-height: 50vh;
+    font-size: 0.85rem;
+  }
+
+  .scanner-placeholder svg {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 12px;
+  }
+
+  .scanner-controls {
+    margin-top: 12px;
+  }
+
+  .input-form {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .barcode-input {
+    width: 100%;
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 14px 16px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 14px 24px;
+    font-size: 16px; /* Better touch target */
+    -webkit-tap-highlight-color: transparent;
+    min-height: 48px; /* Minimum touch target size */
+  }
+
+  .manual-input {
+    margin-top: 20px;
+    padding-top: 20px;
+  }
+
+  .divider {
+    font-size: 0.9rem;
+    margin-bottom: 15px;
+  }
+}
+
+/* Small mobile styles */
+@media (max-width: 480px) {
+  .barcode-scanner {
+    margin-bottom: 15px;
+  }
+
+  .scanner-container {
+    margin-bottom: 12px;
+  }
+
+  .scanner-view {
+    min-height: 45vh;
+    border-radius: 6px;
+  }
+
+  .scanner-placeholder {
+    min-height: 45vh;
+    font-size: 0.8rem;
+    padding: 20px;
+  }
+
+  .scanner-placeholder svg {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 10px;
+  }
+
+  .scanner-controls {
+    margin-top: 10px;
+  }
+
+  .btn {
+    padding: 12px 20px;
+    font-size: 15px;
+    min-height: 44px;
+  }
+
+  .barcode-input {
+    padding: 12px 14px;
+    font-size: 16px;
+  }
+
+  .manual-input {
+    margin-top: 15px;
+    padding-top: 15px;
+  }
+
+  .divider {
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+
+  .divider::before,
+  .divider::after {
+    width: 35%;
+  }
+}
+
+/* Extra small mobile */
+@media (max-width: 360px) {
+  .scanner-view {
+    min-height: 40vh;
+  }
+
+  .scanner-placeholder {
+    min-height: 40vh;
+    font-size: 0.75rem;
+    padding: 15px;
+  }
+
+  .scanner-placeholder svg {
+    width: 40px;
+    height: 40px;
+  }
+
+  .btn {
+    padding: 10px 16px;
+    font-size: 14px;
+    letter-spacing: 0.3px;
+  }
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 768px) and (orientation: portrait) {
+  .scanner-view.mobile.active {
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  }
+
+  .scanner-container.mobile-active .scanner-controls {
+    bottom: 15px;
+    width: 95%;
+  }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .scanner-view.mobile.active {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .scanner-view {
+    min-height: 60vh;
+  }
+
+  .scanner-container.mobile-active .scanner-controls {
+    bottom: 10px;
+    width: 95%;
+    max-width: 400px;
+  }
+
+  .btn {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+}
+
