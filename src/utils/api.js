@@ -3,8 +3,7 @@
  */
 
 // Primary API - Barcode Lookup API (barcodelookup.com)
-const BARCODE_LOOKUP_API_BASE_URL = 'https://api.barcodelookup.com/v3/products';
-const BARCODE_LOOKUP_API_KEY = 'mga8z30cl5vyrxl008nbkfexsi4lyp';
+// Note: API calls are proxied through /api/barcode-lookup serverless function to avoid CORS issues
 
 // Fallback API - RapidAPI Big Product Data API - using HTTPS as required
 const API_BASE_URL = 'https://big-product-data.p.rapidapi.com';
@@ -144,18 +143,19 @@ export const testRapidAPIConnection = async () => {
 };
 
 /**
- * Fetch from Barcode Lookup API (Primary API)
- * API: https://www.barcodelookup.com/api
- * Endpoint: GET /v3/products?barcode={barcode}&key={apiKey}
+ * Fetch from Barcode Lookup API (Primary API) via Proxy
+ * Uses Vercel serverless function to avoid CORS issues
+ * Proxy endpoint: /api/barcode-lookup?barcode={barcode}
  */
 const fetchFromBarcodeLookupAPI = async (barcode) => {
-  const endpoint = `${BARCODE_LOOKUP_API_BASE_URL}?barcode=${barcode}&key=${BARCODE_LOOKUP_API_KEY}`;
+  // Use relative URL to proxy endpoint (works in both dev and production)
+  const proxyEndpoint = `/api/barcode-lookup?barcode=${barcode}`;
   
   try {
-    console.log(`[API] 🔍 Trying primary API (Barcode Lookup): GET ${endpoint}`);
+    console.log(`[API] 🔍 Trying primary API (Barcode Lookup) via proxy: GET ${proxyEndpoint}`);
     
     const response = await fetchWithTimeout(
-      endpoint,
+      proxyEndpoint,
       {
         method: 'GET',
         headers: {
@@ -170,7 +170,7 @@ const fetchFromBarcodeLookupAPI = async (barcode) => {
 
     if (response.ok) {
       const data = await response.json();
-      console.log('[API] ✅ Barcode Lookup API response received');
+      console.log('[API] ✅ Barcode Lookup API response received via proxy');
       
       // Check if products array exists and has data
       if (data.products && Array.isArray(data.products) && data.products.length > 0) {

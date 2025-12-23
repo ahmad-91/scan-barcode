@@ -29,10 +29,18 @@ A web application that scans barcodes and retrieves product information (image a
    Get your API key from [RapidAPI Big Product Data](https://rapidapi.com/bigproductdata/api/big-product-data)
 
 3. **Start the development server:**
+   
+   For local development with serverless functions, use Vercel CLI:
+   ```bash
+   npm i -g vercel
+   vercel dev
+   ```
+   
+   Or use React development server (serverless functions won't work locally):
    ```bash
    npm start
    ```
-
+   
    The app will open at `http://localhost:3000`
 
 ## Usage
