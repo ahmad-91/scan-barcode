@@ -40,3 +40,5 @@ export const formatBarcode = (barcode) => {
   return barcode.trim().replace(/\s/g, '');
 };
 
+
+

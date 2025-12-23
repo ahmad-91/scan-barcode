@@ -1,10 +1,14 @@
 /**
- * API service for Big Product Data API
+ * API service for Barcode Lookup API (Primary) and Big Product Data API (Fallback)
  */
 
-// RapidAPI Big Product Data API - using HTTPS as required
+// Primary API - Barcode Lookup API (barcodelookup.com)
+const BARCODE_LOOKUP_API_BASE_URL = 'https://api.barcodelookup.com/v3/products';
+const BARCODE_LOOKUP_API_KEY = 'mga8z30cl5vyrxl008nbkfexsi4lyp';
+
+// Fallback API - RapidAPI Big Product Data API - using HTTPS as required
 const API_BASE_URL = 'https://big-product-data.p.rapidapi.com';
-// Fallback API - Barcodes Lookup API
+// Secondary Fallback API - Barcodes Lookup API (RapidAPI)
 const FALLBACK_API_BASE_URL = 'https://barcodes-lookup.p.rapidapi.com';
 // Shorter timeout for mobile - don't wait too long
 const REQUEST_TIMEOUT = 15000; // 15 seconds - shorter for better mobile experience
@@ -140,36 +144,140 @@ export const testRapidAPIConnection = async () => {
 };
 
 /**
- * Fetch product data by barcode (no retries for faster mobile experience)
- * Note: RapidAPI supports requests from localhost - CORS is handled automatically
+ * Fetch from Barcode Lookup API (Primary API)
+ * API: https://www.barcodelookup.com/api
+ * Endpoint: GET /v3/products?barcode={barcode}&key={apiKey}
+ */
+const fetchFromBarcodeLookupAPI = async (barcode) => {
+  const endpoint = `${BARCODE_LOOKUP_API_BASE_URL}?barcode=${barcode}&key=${BARCODE_LOOKUP_API_KEY}`;
+  
+  try {
+    console.log(`[API] 🔍 Trying primary API (Barcode Lookup): GET ${endpoint}`);
+    
+    const response = await fetchWithTimeout(
+      endpoint,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        cache: 'no-cache',
+        mode: 'cors',
+        credentials: 'omit',
+      },
+      REQUEST_TIMEOUT
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[API] ✅ Barcode Lookup API response received');
+      
+      // Check if products array exists and has data
+      if (data.products && Array.isArray(data.products) && data.products.length > 0) {
+        const normalized = normalizeBarcodeLookupData(data.products[0], barcode);
+        if (normalized && (normalized.name || normalized.product_name || normalized.image || normalized.brand)) {
+          console.log('[API] ✅ Primary API provided useful data:', {
+            name: normalized.name,
+            image: !!normalized.image,
+            brand: normalized.brand,
+          });
+          return normalized;
+        }
+      }
+      
+      // If products array is empty or no useful data
+      console.warn('[API] ⚠️ Primary API response but no useful data extracted');
+      return null;
+    } else if (response.status === 404) {
+      console.log('[API] ⚠️ Primary API returned 404 - product not found');
+      return null;
+    } else {
+      const errorText = await response.text().catch(() => '');
+      console.warn(`[API] ⚠️ Primary API returned ${response.status}:`, errorText.substring(0, 200));
+      return null;
+    }
+  } catch (error) {
+    console.error('[API] ❌ Primary API error:', error.message);
+    return null;
+  }
+};
+
+/**
+ * Normalize Barcode Lookup API response
+ * Response format: { products: [{ barcode_number, barcode_type, title, manufacturer, brand, model, ... }] }
+ */
+const normalizeBarcodeLookupData = (product, barcode) => {
+  if (!product) return null;
+  
+  return {
+    gtin: product.barcode_number || barcode,
+    gtin13: product.barcode_number || barcode,
+    gtin14: product.barcode_number || barcode,
+    upc: product.barcode_number || barcode,
+    name: product.title || product.product_name || product.name || null,
+    product_name: product.title || product.product_name || product.name || null,
+    title: product.title || product.product_name || product.name || null,
+    brand: product.brand || product.manufacturer || null,
+    manufacturer: product.manufacturer || product.brand || null,
+    description: product.description || product.product_description || null,
+    product_description: product.description || product.product_description || null,
+    image: product.images && Array.isArray(product.images) && product.images.length > 0
+      ? product.images[0]
+      : product.image || product.image_url || null,
+    product_image: product.images && Array.isArray(product.images) && product.images.length > 0
+      ? product.images[0]
+      : product.image || product.image_url || null,
+    image_url: product.images && Array.isArray(product.images) && product.images.length > 0
+      ? product.images[0]
+      : product.image || product.image_url || null,
+    price: product.price || product.price_amount || null,
+    price_amount: product.price || product.price_amount || null,
+    category: product.category || product.product_category || null,
+    model: product.model || null,
+    barcode_type: product.barcode_type || null,
+    // Store additional data
+    all_images: product.images || null,
+    raw_data: product, // Store raw data for reference
+  };
+};
+
+/**
+ * Fetch product data by barcode (Primary: Barcode Lookup API, Fallback: RapidAPI)
+ * Note: Tries Barcode Lookup API first, then falls back to RapidAPI if not found
  */
 export const fetchProductByBarcode = async (barcode) => {
-  const apiKey = getApiKey();
-  
   // Validate barcode format (numeric, 8-14 digits typically)
   if (!/^\d{8,14}$/.test(barcode)) {
     throw new Error('Invalid barcode format. Please enter a valid GTIN/UPC/EAN (8-14 digits).');
   }
 
-  // RapidAPI required headers - all requests must use HTTPS
-  // RapidAPI automatically handles CORS for localhost requests
-  const headers = {
-    'X-RapidAPI-Key': apiKey,
-    'X-RapidAPI-Host': 'big-product-data.p.rapidapi.com',
-    'Accept': 'application/json',
-  };
-
-  // Correct endpoint format based on RapidAPI Big Product Data API documentation
-  // The correct endpoint is: /gtin/{barcode}
-  const endpoint = `${API_BASE_URL}/gtin/${barcode}`;
-
+  // Step 1: Try Primary API - Barcode Lookup API
+  console.log('[API] 🔍 Step 1: Trying Primary API (Barcode Lookup)...');
   try {
-    console.log(`[API] Making HTTPS GET request to: ${endpoint}`);
-    console.log(`[API] Timeout: ${REQUEST_TIMEOUT / 1000} seconds (no retries)`);
-    
-    const requestStartTime = Date.now();
-  
-    // Make HTTPS GET request to RapidAPI - single attempt, no retries
+    const primaryData = await fetchFromBarcodeLookupAPI(barcode);
+    if (primaryData && (primaryData.name || primaryData.product_name || primaryData.image || primaryData.brand)) {
+      console.log('[API] ✅ Primary API (Barcode Lookup) returned data');
+      // Add metadata about missing fields
+      primaryData.missingFields = checkMissingFields(primaryData);
+      primaryData.availableFields = checkAvailableFields(primaryData);
+      primaryData.hasIncompleteData = primaryData.missingFields.length > 0;
+      return primaryData;
+    }
+  } catch (primaryError) {
+    console.warn('[API] ⚠️ Primary API (Barcode Lookup) failed:', primaryError.message);
+  }
+
+  // Step 2: Try First Fallback - RapidAPI Big Product Data API
+  console.log('[API] 🔄 Step 2: Trying First Fallback (RapidAPI Big Product Data)...');
+  try {
+    const apiKey = getApiKey();
+    const endpoint = `${API_BASE_URL}/gtin/${barcode}`;
+    const headers = {
+      'X-RapidAPI-Key': apiKey,
+      'X-RapidAPI-Host': 'big-product-data.p.rapidapi.com',
+      'Accept': 'application/json',
+    };
+
     const response = await fetchWithTimeout(
       endpoint,
       {
@@ -183,182 +291,40 @@ export const fetchProductByBarcode = async (barcode) => {
       REQUEST_TIMEOUT
     );
 
-    const requestDuration = Date.now() - requestStartTime;
-    console.log(`[API] Request completed in ${requestDuration}ms`);
-
-    console.log(`[API] Response status: ${response.status}`);
-    console.log(`[API] Response headers:`, Object.fromEntries(response.headers.entries()));
-
-    // Check if response is ok
     if (response.ok) {
-      let data;
-      try {
-        // Check content type
-        const contentType = response.headers.get('content-type');
-        console.log(`[API] Content-Type: ${contentType}`);
-        
-        if (contentType && contentType.includes('application/json')) {
-          data = await response.json();
-        } else {
-          // Try to parse as JSON anyway
-          const text = await response.text();
-          if (!text) {
-            throw new Error('Empty response from API');
-          }
-          console.log(`[API] Response text (first 200 chars):`, text.substring(0, 200));
-          data = JSON.parse(text);
-        }
-        
-        console.log(`[API] Successfully parsed response data`);
-      } catch (parseError) {
-        console.error('[API] Failed to parse API response:', parseError);
-        const errorText = await response.text().catch(() => 'Unable to read error response');
-        console.error('[API] Response text:', errorText.substring(0, 500));
-        throw new Error(`Invalid response format from API: ${parseError.message}`);
-      }
-
+      const data = await response.json();
       const normalizedData = normalizeProductData(data);
-      console.log(`[API] Normalized product data:`, {
-        name: normalizedData.name,
-        gtin: normalizedData.gtin,
-        hasImage: !!normalizedData.image
-      });
       
-      // Check what data is available and what's missing
-      const missingFields = [];
-      const availableFields = [];
-      
-      if (!normalizedData.name && !normalizedData.product_name && !normalizedData.title) {
-        missingFields.push('اسم المنتج');
-      } else {
-        availableFields.push('اسم المنتج');
-      }
-      
-      if (!normalizedData.image && !normalizedData.product_image && !normalizedData.image_url) {
-        missingFields.push('صورة المنتج');
-      } else {
-        availableFields.push('صورة المنتج');
-      }
-      
-      if (!normalizedData.brand && !normalizedData.manufacturer) {
-        missingFields.push('العلامة التجارية');
-      } else {
-        availableFields.push('العلامة التجارية');
-      }
-      
-      if (!normalizedData.description && !normalizedData.product_description) {
-        missingFields.push('الوصف');
-      } else {
-        availableFields.push('الوصف');
-      }
-      
-      if (!normalizedData.price && !normalizedData.price_amount) {
-        missingFields.push('السعر');
-      } else {
-        availableFields.push('السعر');
-      }
-      
-      // Always return data if we have at least GTIN or some product info
       if (normalizedData && (normalizedData.gtin || normalizedData.upc || normalizedData.name || normalizedData.product_name)) {
-        // Add metadata about missing fields
-        normalizedData.missingFields = missingFields;
-        normalizedData.availableFields = availableFields;
-        normalizedData.hasIncompleteData = missingFields.length > 0;
-        
-        if (missingFields.length > 0) {
-          console.warn(`[API] ⚠️ Product data is incomplete. Missing: ${missingFields.join(', ')}`);
-          console.log(`[API] ✅ Available fields: ${availableFields.join(', ')}`);
-          
-          // If critical data is missing (name or image), try fallback API
-          if (missingFields.includes('اسم المنتج') || missingFields.includes('صورة المنتج')) {
-            console.log('[API] 🔄 Trying fallback API for missing data...');
-            try {
-              const fallbackData = await fetchFromFallbackAPI(barcode);
-              if (fallbackData) {
-                // Merge fallback data with existing data
-                const mergedData = mergeProductData(normalizedData, fallbackData);
-                mergedData.missingFields = checkMissingFields(mergedData);
-                mergedData.availableFields = checkAvailableFields(mergedData);
-                mergedData.hasIncompleteData = mergedData.missingFields.length > 0;
-                return mergedData;
-              }
-            } catch (fallbackError) {
-              console.warn('[API] Fallback API failed:', fallbackError.message);
-              // Continue with original data
-            }
-          }
-        }
-        
+        console.log('[API] ✅ First Fallback (RapidAPI Big Product Data) returned data');
+        normalizedData.missingFields = checkMissingFields(normalizedData);
+        normalizedData.availableFields = checkAvailableFields(normalizedData);
+        normalizedData.hasIncompleteData = normalizedData.missingFields.length > 0;
         return normalizedData;
-      } else {
-        // No data at all, try fallback API
-        console.log('[API] 🔄 No data from primary API, trying fallback API...');
-        const fallbackData = await fetchFromFallbackAPI(barcode);
-        if (fallbackData && (fallbackData.name || fallbackData.product_name || fallbackData.image || fallbackData.manufacturer)) {
-          console.log('[API] ✅ Fallback API provided data when primary API had none');
-          return fallbackData;
-        }
-        
-        throw new Error('لم يتم العثور على بيانات المنتج. يرجى المحاولة بباركود آخر.');
       }
     }
-
-    // Handle HTTP errors
-    if (response.status === 404) {
-      // Try fallback API before giving up
-      console.log('[API] 🔄 404 from primary API, trying fallback API...');
-      const fallbackData = await fetchFromFallbackAPI(barcode);
-      if (fallbackData && (fallbackData.name || fallbackData.product_name || fallbackData.image || fallbackData.manufacturer)) {
-        console.log('[API] ✅ Fallback API provided data');
-        return fallbackData;
-      }
-      throw new Error('Product not found. Please try another barcode.');
-    }
-
-    if (response.status === 401 || response.status === 403) {
-      throw new Error('Invalid API key. Please check your RapidAPI key configuration.');
-    }
-
-    if (response.status === 429) {
-      throw new Error('Rate limit exceeded. Please try again later.');
-    }
-
-    if (response.status >= 500) {
-      throw new Error(`Server error: ${response.status} ${response.statusText}`);
-    }
-
-    // For other errors
-    const errorText = await response.text().catch(() => '');
-    throw new Error(`API Error: ${response.status} ${response.statusText}. ${errorText}`);
-  } catch (error) {
-    console.error('[API] Request error:', error);
-    
-    // Handle timeout - no retries, just try fallback
-    if (error.message === 'Request timeout' || error.name === 'AbortError') {
-      console.warn('[API] ⚠️ Request timed out, trying fallback API...');
-      try {
-        const fallbackData = await fetchFromFallbackAPI(barcode);
-        if (fallbackData && (fallbackData.name || fallbackData.product_name || fallbackData.image || fallbackData.manufacturer)) {
-          console.log('[API] ✅ Fallback API provided data after timeout');
-          return fallbackData;
-        }
-      } catch (fallbackError) {
-        console.warn('[API] Fallback API also failed:', fallbackError.message);
-      }
-      throw new Error(`Request timed out after ${REQUEST_TIMEOUT / 1000} seconds. Please check your internet connection.`);
-    }
-    
-    if (error.name === 'TypeError' && (error.message.includes('fetch') || error.message.includes('Failed to fetch'))) {
-      throw new Error('Network error. Please check your internet connection.');
-    }
-
-    if (error.message.includes('CORS') || error.message.includes('cross-origin')) {
-      throw new Error('CORS error. Please check your browser console for details.');
-    }
-
-    // Re-throw other errors
-    throw error;
+  } catch (fallback1Error) {
+    console.warn('[API] ⚠️ First Fallback (RapidAPI Big Product Data) failed:', fallback1Error.message);
   }
+
+  // Step 3: Try Second Fallback - RapidAPI Barcodes Lookup API
+  console.log('[API] 🔄 Step 3: Trying Second Fallback (RapidAPI Barcodes Lookup)...');
+  try {
+    const fallbackData = await fetchFromFallbackAPI(barcode);
+    if (fallbackData && (fallbackData.name || fallbackData.product_name || fallbackData.image || fallbackData.manufacturer)) {
+      console.log('[API] ✅ Second Fallback (RapidAPI Barcodes Lookup) returned data');
+      fallbackData.missingFields = checkMissingFields(fallbackData);
+      fallbackData.availableFields = checkAvailableFields(fallbackData);
+      fallbackData.hasIncompleteData = fallbackData.missingFields.length > 0;
+      return fallbackData;
+    }
+  } catch (fallback2Error) {
+    console.warn('[API] ⚠️ Second Fallback (RapidAPI Barcodes Lookup) failed:', fallback2Error.message);
+  }
+
+  // All APIs failed
+  console.error('[API] ❌ All APIs failed to find product data');
+  throw new Error('لم يتم العثور على بيانات المنتج. يرجى المحاولة بباركود آخر.');
 };
 
 /**
