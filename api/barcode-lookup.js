@@ -8,7 +8,7 @@ const BARCODE_LOOKUP_API_KEY = 'mga8z30cl5vyrxl008nbkfexsi4lyp';
 
 export default async function handler(req, res) {
   // Enable CORS for all origins
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   res.setHeader(
@@ -57,17 +57,41 @@ export default async function handler(req, res) {
       },
     });
 
-    // Get response data
-    const data = await response.json();
+    // Check if response is ok
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`[Proxy] API returned ${response.status}:`, errorText.substring(0, 200));
+      res.status(response.status).json({ 
+        error: 'API request failed', 
+        status: response.status,
+        message: errorText.substring(0, 200)
+      });
+      return;
+    }
 
-    // Return the API response with appropriate status code
-    res.status(response.status).json(data);
+    // Get response data
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      console.error('[Proxy] Failed to parse JSON:', parseError);
+      res.status(500).json({ 
+        error: 'Failed to parse API response',
+        message: parseError.message 
+      });
+      return;
+    }
+
+    // Return the API response with success status
+    res.status(200).json(data);
   } catch (error) {
     console.error('[Proxy] Error:', error);
-    res.status(500).json({ 
-      error: 'Internal server error', 
-      message: error.message 
-    });
+    console.error('[Proxy] Error stack:', error.stack);
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Internal server error', 
+        message: error.message || 'Unknown error occurred'
+      });
+    }
   }
 }
-
